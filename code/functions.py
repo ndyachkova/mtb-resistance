@@ -1,26 +1,63 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from datetime import timedelta
-import time
 from gensim.models import Word2Vec
-from tqdm import tqdm
-from w2v_lstm_functions import make_feature_list, sort_key
-from w2v_lstm_functions import preproc as preproc_single
-from sklearn.metrics import roc_auc_score as auc_score
-# roc_auc_score(y_true, y_pred), y_pred is probability of the greater class
-from sklearn.metrics import f1_score, recall_score
 import os
-from scipy.sparse import csc_matrix
-from scipy.spatial.distance import pdist, squareform
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import pickle
-from sklearn.metrics import jaccard_score
 
-# updated for multi
+
+total = pd.read_csv('data/annotation_short.csv')
+
+start = dict(zip(total['name'], total['start']))
+end = dict(zip(total['name'], total['end']))
+strand = dict(zip(total['name'], total['strand']))
+
+
+def sort_key(ft):
+    """
+    Key function for sorting along the genome. Returns mutation coordinate.
+    """
+    # if agregated: start of gene
+    if ft.find('_PF') != -1:
+        if strand[ft[:ft.find('_PF')]] == '+':
+            return start[ft[:ft.find('_PF')]]
+        else:
+            return end[ft[:ft.find('_PF')]]
+    # if broken
+    if ft.find('broken_gene') != -1 or ft.find('broken_start') != -1:
+        if strand[ft[:ft.find('#')]] == '+':
+            return start[ft[:ft.find('#')]]
+        else:
+            return end[ft[:ft.find('#')]]
+    # broken end
+    if ft.find('broken_end') != -1:
+        if strand[ft[:ft.find('#')]] == '+':
+            return end[ft[:ft.find('#')]]
+        else:
+            return start[ft[:ft.find('#')]]
+    # alt start
+    if ft.find('alternative_start') != -1:
+        if strand[ft[:ft.find('#')]] == '+':
+            return start[ft[:ft.find('#')]]
+        else:
+            return end[ft[:ft.find('#')]]
+    ft = ft.split('#')
+    # if only coordinate (no gene)
+    if ft[0] == '-':
+        return int(ft[1]) # feature is -, coord, description
+    
+    # if gene + coord: gene start + coord
+    try:
+        t = int(ft[1])
+    except:
+        print(ft)
+    if strand[ft[0]] == '+':
+        return start[ft[0]] + int(ft[1])
+    else:
+        return end[ft[0]] - int(ft[1])
+    
+
 class Attention(nn.Module):
     def __init__(self, hidden_dim):
         super().__init__()
@@ -29,9 +66,6 @@ class Attention(nn.Module):
     def forward(self, lstm_output):
         # lstm_output = [batch size, seq_len, hidden_dim]
         attention_scores = self.attn(lstm_output)
-        # attention_scores = [batch size, seq_len, 1]
-        #attention_scores = attention_scores.squeeze(-1)
-        # attention_scores = [batch size, seq_len]
         return F.softmax(attention_scores, dim=-2)
     
 
@@ -66,14 +100,10 @@ class lstm_attn_multi(nn.Module):
         # outputs all states, (hidden_state, cell_state)
         out = [0] * len(self.drugs)
         for i in range(len(self.drugs)):
-            out[i], _ = self.lstm[i](data[i]) # mod for split_by_drug: data -> data[i]
-        #print('out:', out.shape)
-        # x = hidden[1]  # later update
+            out[i], _ = self.lstm[i](data[i])
         weights = [0] * len(self.drugs)
         for i in range(len(self.drugs)):
-          weights[i] = self.attn[i](out[i])#.unsqueeze(-1)  # adding an extra dimention at the end
-          #print(out.shape)
-          #print(weights.shape)
+          weights[i] = self.attn[i](out[i])
           if self.zero:
             thr = 1/weights[i].shape[0] * self.mul
             msk = weights[i] > thr
@@ -82,25 +112,19 @@ class lstm_attn_multi(nn.Module):
             weights[i] = weights[i][msk]
             #
             out[i] = out[i][msk]
-            #weights[i] = weights[i].masked_fill(weights[i] < thr, 0)
         x = [0] * len(self.drugs)
         for i in range(len(self.drugs)):
           w = out[i] * weights[i]
-          #print(w.shape)
           w = w.sum(dim=0)
           x[i] = self.linear[i](w)
         return torch.stack(x), weights
 
 
-def load_model(drugs, hidden_dim, model_name, bidir, path='', skip_ind=[], use_attn=True, use_linear=True, empty=False, zero=False, mul=1):
+def load_model(drugs, hidden_dim, model_name, bidir, skip_ind=[], use_attn=True, use_linear=True, empty=False, zero=False, mul=1):
     """
     Load saved model.
 
-    multi: bool, default:True; True: Load multi-drug model, False: load model for a single drug
-
     skip_ind: list of indeces; for these drugs model is not loaded. Only used if multi=True.
-
-    ep: list, epoch numbers for each model. If multi - list length of 1.
 
     use_attn: bool; if True, load attention weights
     use_linear: bool; only used if use_attn=True
@@ -443,7 +467,7 @@ def construct_data_from_index(model, path, name, drugs, set_name, samples=[], po
 
 
 
-def load_all_data_from_index(drugs, w2v_name, path, name, no_y=True, res_path='../data/all_resistance.csv', positional=False, n=1e5, verbose=False, use_unmatched=False, return_names=False):
+def load_all_data_from_index(drugs, w2v_name, path, name, positional=False, n=1e8, verbose=False, use_unmatched=False, return_names=False):
     """
     Loads all samples from index, constructs data vectors ready to go into ml model.
     """
