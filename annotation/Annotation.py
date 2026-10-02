@@ -1364,7 +1364,7 @@ if __name__ == "__main__":
     # make this path to samples
     input_path = args['input']
     # list of samples
-    input_list = args['samples']
+    input_list = args.get('samples', '')
     #output folder
     outfolder = args['out']
     #threshold for identity
@@ -1379,9 +1379,14 @@ if __name__ == "__main__":
     #domain_path='../domain_scores_new/',
     # available sample files
     avail = os.listdir(input_path)
+    
     # samples: presumed one filename per line
-    with open(input_list) as f:
-        smps = list([x.split()[0] for x in f.readlines()])
+    if samples:
+        with open(input_list) as f:
+            smps = list([x.split()[0] for x in f.readlines()])
+    else:
+        smps = sorted(avail)
+    
     # last sample
     last_sample = args.get('last', len(smps))
     # check that all requested samples are present in provided folder
