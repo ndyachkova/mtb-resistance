@@ -1,1 +1,7 @@
-data
+`all_features.txt`: list of all possible features
+
+`feature_lists.txt`: lists of features for each drug. Each line corresponds to one sample; first word is sample ID, then - list of indeces of features in this sample
+
+`lstm_model.pt`: weights for LSTM model
+
+`word2vec_model.model`: weights for Word2Vec model
