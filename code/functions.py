@@ -356,7 +356,7 @@ def preproc(model, drugs, data, unmatched, match=False):
     return tr, names, unmatched
 
 
-def preprocess_data(data, y_data, model, drugs, set_name, positional=False, n=1e5, verbose=False, use_unmatched=False, return_names=False):
+def preprocess_data(data, model, drugs, set_name, positional=False, n=1e5, verbose=False, use_unmatched=False, return_names=False):
     """
     Turn list of features into vectors.
     data: list of features for each sample
@@ -378,7 +378,6 @@ def preprocess_data(data, y_data, model, drugs, set_name, positional=False, n=1e
 
     if verbose:
         print(set_name, len(data_vectors), len(data_vectors[0]))
-        print(set_name, 'y', y_data.shape)
 
     if positional:
         # tr[i][j] (i-sample, j - drug)
@@ -402,26 +401,21 @@ def preprocess_data(data, y_data, model, drugs, set_name, positional=False, n=1e
     
     # for each drug train_vectors are a list of tensors
     data_vectors = [[torch.from_numpy(x.copy()) for x in v] for v in data_vectors]
-    y_data = [torch.from_numpy(x.copy()) for x in y_data]
-    y_data = torch.stack(y_data).long()
-
-    if verbose:
-        print(set_name, 'y', y_data.shape)
 
     if return_names:
         if use_unmatched:
-            return data_names, data_vectors, y_data, unmatched_data
+            return data_names, data_vectors, unmatched_data
         else:
-            return data_names, data_vectors, y_data
+            return data_names, data_vectors
         #return train_samples, train_names, train_vectors, y_train, test_samples, test_names, test_vectors, y_test
         #return train_samples, train_vectors, y_train, test_samples, test_vectors, y_test
     if use_unmatched:
-        return data_vectors, y_data, unmatched_data
+        return data_vectors, unmatched_data
     else:
-        return data_vectors, y_data
+        return data_vectors
 
 
-def construct_data_from_index(samples, y_data, model, path, name, drugs, set_name, positional=False, renew_samples=False, n=1e5, verbose=False, use_unmatched=False, return_names=False):
+def construct_data_from_index(model, path, name, drugs, set_name, samples=[], positional=False, renew_samples=False, n=1e5, verbose=False, use_unmatched=False, return_names=False):
     """
     Turn list of samples and vector of y-values into data ready to go into model training.
 
@@ -437,33 +431,22 @@ def construct_data_from_index(samples, y_data, model, path, name, drugs, set_nam
             samples = samples_new
         # if some samples were dropped
         else:
-            msk = [True if x in samples_new else False for x in samples]
-            y_data = y_data[msk]
             samples = samples_new
-    
-    assert len(samples) == len(y_data)
     
     if verbose:
         print('Loaded data')
     
-    data = preprocess_data(data, y_data, model, drugs, set_name, positional=positional, n=n, verbose=verbose, use_unmatched=use_unmatched, return_names=return_names)
+    data = preprocess_data(data, model, drugs, set_name, positional=positional, n=n, verbose=verbose, use_unmatched=use_unmatched, return_names=return_names)
+    if renew_samples:
+        return data, samples
     return data
 
 
 
-def load_all_data_from_index(drugs, w2v_name, path, name, res_path='../data/all_resistance.csv', positional=False, n=1e5, verbose=False, use_unmatched=False, return_names=False):
+def load_all_data_from_index(drugs, w2v_name, path, name, no_y=True, res_path='../data/all_resistance.csv', positional=False, n=1e5, verbose=False, use_unmatched=False, return_names=False):
     """
     Loads all samples from index, constructs data vectors ready to go into ml model.
     """
-    # open file with info on resistance
-    data = pd.read_csv(res_path)
-    # selecting columns for chosen drugs
-    data = data[['id'] + drugs].dropna().copy()
-
-    print(data.shape[0], 'samples')
-
-    samples = list(data['id'])
-    y_data = data[drugs].to_numpy(dtype=int)
 
     model = Word2Vec.load(f"data/word2vec_{w2v_name}.model")
 
@@ -471,18 +454,17 @@ def load_all_data_from_index(drugs, w2v_name, path, name, res_path='../data/all_
 
     #data_names, data_vectors, y_data
 
-    constr = construct_data_from_index(samples, y_data, model, path, name, drugs, 'all_samples', positional=positional, 
-                                renew_samples=False, n=n, verbose=verbose, use_unmatched=use_unmatched, return_names=return_names)
+    constr, samples = construct_data_from_index(model, path, name, drugs, 'all_samples', positional=positional, 
+                                renew_samples=True, n=n, verbose=verbose, use_unmatched=use_unmatched, return_names=return_names)
     
     print(len(constr[-1]), 'vectors')
-    assert len(constr[-1]) == len(samples)
 
     if return_names:
-        data_names, data_vectors, y_data = constr
-        return data_names, data_vectors, y_data, data
+        data_names, data_vectors = constr
+        return data_names, data_vectors, samples
     else:
-        data_vectors, y_data = constr
-        return data_vectors, y_data, data
+        data_vectors = constr
+        return data_vectors, samples
 
 
 def predict_and_save(data, model):
