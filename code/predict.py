@@ -5,8 +5,6 @@ import pandas as pd
 
 drugs = sorted(['Ethambutol', 'Isoniazid', 'Pyrazinamide', 'Rifampicin'])
 
-res_path = '../data/all_resistance.csv'
-
 out_file = 'predictions.txt'
 
 # for loading data from index
@@ -29,8 +27,7 @@ if positional:
 
 print('File', out_file)
 
-data_vectors, y_data, samples = load_all_data_from_index(drugs, w2v_name, feature_lists, cur_name, res_path=res_path, positional=positional, n=n, 
-                         verbose=False, use_unmatched=False, return_names=False)
+data_vectors, y_data, samples = load_all_data_from_index(drugs, w2v_name, feature_lists, cur_name, positional=positional, n=n)
 
 print('Loaded data')
 
@@ -41,7 +38,9 @@ cols = ['EMB_pred', 'EMB_prob_pos', 'INH_pred', 'INH_prob_pos', 'PYR_pred', 'PYR
 multi_name = 'model'
 
 print()
+
 print('Model:', multi_name, end=' ')
+
 
 model = load_model(drugs, hidden_dim, multi_name, bidir, multi=True)
 model.eval()
@@ -52,12 +51,9 @@ data = pd.DataFrame(res, index=samples, columns=cols)
 
 print('Done')
 
+
 for cl in data.columns:
     if cl.find('pred') != -1:
         data[cl] = data[cl].astype(int)
 
-# round probability
-data.round(3)
 data.to_csv(out_file)
-
-
