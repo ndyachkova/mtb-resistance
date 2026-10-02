@@ -42,7 +42,7 @@ print()
 print('Model:', multi_name, end=' ')
 
 
-model = load_model(drugs, hidden_dim, multi_name, bidir, multi=True)
+model = load_model(drugs, hidden_dim, multi_name, bidir)
 model.eval()
 
 res = predict_and_save(data_vectors, model)
@@ -57,3 +57,4 @@ for cl in data.columns:
         data[cl] = data[cl].astype(int)
 
 data.to_csv(out_file)
+
