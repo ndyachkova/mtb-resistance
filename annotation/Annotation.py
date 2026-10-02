@@ -1355,23 +1355,27 @@ if __name__ == "__main__":
     #for file in files
     # run annot for one sample
     #file with variant calling result for an isolate (the list of variants)
+    arg_list = sys.argv[1:]
+    args = dict()
+    for ar in arg_list:
+        #print(ar)
+        ar = ar.split('=')
+        args[ar[0]] = ar[1]
     # make this path to samples
-    input_path = sys.argv[1]
+    input_path = args['input']
     # list of samples
-    input_list = sys.argv[2]
+    input_list = args['samples']
     #output folder
-    outfolder = sys.argv[3]
+    outfolder = args['out']
     #threshold for identity
-    threshold = float(sys.argv[4])
+    threshold = float(args.get('thr', 0.5))
     # first sample
-    first_sample = int(sys.argv[5])
+    first_sample = int(args.get('first', 0))
     # verbose
-    verbose = (sys.argv[7] == 'T')
+    verbose = (args.get('verbose', 'F') == 'T')
     # path to domain scores
-    if len(sys.argv) == 9:
-        domain_path = sys.argv[8]
-    else:
-        domain_path = ''
+    domain_path = args.get('domains', '')
+    
     #domain_path='../domain_scores_new/',
     # available sample files
     avail = os.listdir(input_path)
@@ -1379,10 +1383,7 @@ if __name__ == "__main__":
     with open(input_list) as f:
         smps = list([x.split()[0] for x in f.readlines()])
     # last sample
-    if sys.argv[6] == '-':
-        last_sample = len(smps)
-    else:
-        last_sample = int(sys.argv[6])
+    last_sample = args.get('last', len(smps))
     # check that all requested samples are present in provided folder
     check = set(smps[first_sample:last_sample]) - set(avail)
     if len(check) != 0:
